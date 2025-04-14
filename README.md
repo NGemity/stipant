@@ -11,8 +11,22 @@ In search for a small project to play around with [tauri](https://tauri.app) and
 Dump all has been improved to use a single thread per data-file.  
 On a packed archive with around 100k files I can achieve sub 2 second for dumping every file.
 
+#### Build it yourself
+Due to dependencies on WebView, I can only release packed installers (see Github Action).  
+If you want to build the executable yourself to not rely on an installer, do the following:
+
+- [Install Rust](https://www.rust-lang.org/tools/install)
+- [Install tauri](https://v2.tauri.app/):
+- [Install PNPM](https://pnpm.io/installation)
+- Build stipent
+  ```ps
+    cd src-tauri/
+    cargo tauri build
+   ```
+
+
 ## Screenshot
 
 <p align="center">
         <img src="/.github/screenshot.png" />
-</p>
+</p>1
