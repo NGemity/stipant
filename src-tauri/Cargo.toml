@@ -1,9 +1,9 @@
 [package]
 name = "stipant"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-edition = "2021"
+description = "Unpacker for the ROSE project."
+authors = ["Xijezu"]
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,4 +25,6 @@ serde_json = "1"
 tauri-plugin-dialog = "2"
 anyhow = "1.0.97"
 bytes = "1.10.1"
+binrw = "0.14.1"
+thiserror = "2.0.12"
 
