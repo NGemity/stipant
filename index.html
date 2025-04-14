@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/simple-grid.css" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tauri App</title>
+    <script type="module" src="/src/main.ts" defer></script>
+  </head>
+
+  <body>
+    <main class="container">
+
+      <div class="center">
+        <a href="https://ngemity.dev" target="_blank">
+          <img src="/src/assets/ngemity.png" class="logo ngemity" alt="NGemity logo" />
+        </a>
+      </div>
+
+      <form class="row" id="select-data-dir" name="select-data-dir">
+        <div class="col-9-sm">
+          <input id="data_dir" name="data_dir" placeholder="Select data.000 folder" disabled/>
+        </div>
+        <div class="col-3-sm">
+          <button type="submit">Select</button>
+        </div>
+      </form>
+      <form class="row" id="select-export-dir">
+        <div class="col-9-sm">
+          <input id="export_dir" placeholder="Select export folder" disabled />
+        </div>
+        <div class="col-3-sm">
+          <button type="submit">Select</button>
+        </div>
+      </form>
+
+      <div class="row">
+        <div class="col-12-sm">
+          <label for="filename">File Name:</label>
+          <input id="filename" name="filename" disabled/>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-12-sm">
+        <label for="filehash">File Hash:</label>
+        <input id="filehash" name="filehash" disabled  />
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-12-sm">
+          <label for="location">Location:</label>
+          <input id="location" name="location" disabled  />
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-6-sm">
+          <label for="offset">Offset:</label>
+          <input id="offset" name="offset" disabled  />          
+        </div>
+        <div class="col-6-sm">
+          <label for="size">Size:</label>
+          <input id="size" name="size" disabled  />
+        </div>
+      </div>
+
+      <div class="row">
+        <form class="col-4-sm" id="dump_file">
+          <button type="submit" id="dump_file_btn" disabled>Dump File</button>
+        </form>
+        <form class="col-4-sm" id="dump_all">
+          <button type="submit" id="dump_all_btn" disabled>Dump All</button>
+        </form>
+        <div class="col-4-sm filecount">File Count: <p id="filecount">0</p></div>
+      </div>
+    </main>
+  </body>
+</html>
