@@ -1,8 +1,16 @@
 use std::{
-    collections::HashMap, fs::File, io::{BufReader, Cursor, Read}, string, sync::Arc
+    collections::HashMap,
+    fs::{self, File, OpenOptions},
+    io::{Cursor, Read, Seek, Write},
+    path::Path,
+    sync::Arc, thread,
 };
 
-use bytes::{Buf, Bytes};
+
+use binrw::{BinRead, binrw};
+use bytes::Buf;
+
+use thiserror::Error;
 
 const RESOURCE_ENCODE_KEY: [u8; 256] = [
     0x77, 0xe8, 0x5e, 0xec, 0xb7, 0x4e, 0xc1, 0x87, 0x4f, 0xe6, 0xf5, 0x3c, 0x1f, 0xb3, 0x15, 0x43,
@@ -45,60 +53,110 @@ const REF_TABLE: [u8; 128] = [
     0x2b, 0x1a, 0x0d, 0x05, 0x41, 0x29, 0x0b, 0x30, 0x08, 0x32, 0x53, 0x07, 0x00, 0x34, 0x1e, 0x00,
 ];
 
+const DECRYPTED_EXTENSIONS: [&str; 6] = ["dds", "cob", "naf", "nx3", "nfm", "tga"];
+
+#[derive(Error, Debug)]
+enum StripantError {
+    #[error("Invalid file path, data.00{0} not found.")]
+    NoDataPath(u8),
+    #[error("Not a directory.")]
+    NotADirectory,
+    #[error("Not a file extension.")]
+    NotAnExtension,
+    #[error("Invalid export directory!")]
+    InvalidExportDirectory,
+}
+
+/// Structure for usage in stripent
 #[derive(Default, Debug, serde::Serialize)]
 pub struct RZFile {
+    pub base: IndexFile,
     pub hash: String,
     pub name: String,
+    pub file: u8,
+    pub found: bool // For visualising
+}
+
+#[binrw]
+#[brw(little)]
+#[derive(Default, Debug, serde::Serialize)]
+/// Structure of the data.000 file
+pub struct IndexFile {
+    pub str_len: u8,
+    #[br(count = str_len)]
+    pub hash: Vec<u8>,
     pub offset: u32,
     pub size: u32,
-    pub file: u8,
 }
 
+/// Collection of RZFiles
 pub struct DataHandler {
-    pub file_list: HashMap<String, Arc<RZFile>>,
+    pub data_dir: String,
+    pub export_dir: Option<String>,
+    file_list: HashMap<String, Arc<RZFile>>,
+    loop_list: HashMap<u8, Vec<Arc<RZFile>>>,
 }
 
-#[allow(clippy::never_loop)]
 impl DataHandler {
     pub fn new(filepath: &str) -> Result<Self, anyhow::Error> {
+        let path = Path::new(filepath);
+        if !path.is_dir() {
+            return Err(StripantError::NotADirectory.into());
+        }
+
+        let data_file = path.join("data.000");
+        if !data_file.is_file() {
+            return Err(StripantError::NoDataPath(0).into());
+        }
+
+        let mut loop_list = HashMap::new();
+        for n in 1..9 {
+            let _ = loop_list.insert(n as u8, Vec::<Arc<RZFile>>::new());
+        }
+        // Read file into buffer
         let mut buf = Vec::new();
-        let _ = File::open(filepath)?.read_to_end(&mut buf)?;
+        File::open(data_file)?.read_to_end(&mut buf)?;
+        // decipher file
+        RZFileManagement::cipher(&mut buf);
 
         let mut file_list = HashMap::new();
-        let mut index = 0u8;
-
         let mut reader = Cursor::new(buf);
+
         while reader.has_remaining() {
-            // Read length of first hash
-            let str_len: u8 = reader.get_u8() ^ RESOURCE_ENCODE_KEY[index as usize];
-            index = index.checked_add(1).unwrap_or(0);
-            // Initialize buffer with correct size
-            let mut string_vec = vec![0u8; str_len as usize];
-            reader.read_exact(&mut string_vec)?;
-            index = RZFileManagement::cipher(&mut string_vec, index);
-            // Read encrypted bits for size and file
-            let mut size_vec = vec![0u8; 8];
-            reader.read_exact(&mut size_vec)?;
-            index = RZFileManagement::cipher(&mut size_vec, index);
-            // Hacky
-            let mut size_reader = Cursor::new(size_vec);
-            let offset = size_reader.get_u32_le();
-            let size = size_reader.get_u32_le();
+            let data = IndexFile::read(&mut reader)?;
 
-            let name = RZFileManagement::decode_filename(string_vec.clone())?;
-            let hash = String::from_utf8(string_vec)?;
+            let name = RZFileManagement::decode_filename(data.hash.clone())?;
+            let hash = String::from_utf8(data.hash.clone())?;
 
-            let data = RZFile {
+            let rz_file = Arc::new(RZFile {
                 hash: hash.clone(),
                 name: name.clone(),
                 file: RZFileManagement::get_file_no(hash.as_str()),
-                offset,
-                size
+                base: data,
+                found: true
+            });
+            if let Some(val) = loop_list.get_mut(&rz_file.file) {
+                val.push(rz_file.clone());
             };
-            let _ = file_list.insert(name, Arc::new(data));
+            let _ = file_list.insert(name, rz_file);
         }
 
-        Ok(Self { file_list })
+        for n in 1..9 {
+            if let Some(val) = loop_list.get_mut(&n) {
+                val.sort_by(|a, b| a.base.offset.partial_cmp(&b.base.offset).unwrap());
+            };
+        }
+
+        Ok(Self {
+            file_list,
+            loop_list,
+            data_dir: filepath.to_string(),
+            export_dir: None,
+        })
+    }
+
+    pub fn set_export_dir(&mut self, export_dir: &str) {
+        self.export_dir = Some(export_dir.to_string());
     }
 
     pub fn get_entry_by_name(&self, file_name: &str) -> Option<Arc<RZFile>> {
@@ -107,6 +165,105 @@ impl DataHandler {
 
     pub fn len(&self) -> usize {
         self.file_list.len()
+    }
+
+    fn check_export_dir(&self) -> bool {
+        if self.export_dir.is_none() {
+            return false;
+        }
+        Path::new(&self.export_dir.as_ref().unwrap()).is_dir()
+    }
+
+    pub fn dump_all(&self) {
+        if !self.check_export_dir() {
+            return;
+        }
+
+        let threads: Vec<_> = (1..9)
+            .map(|i| {
+                let data_dir = self.data_dir.clone();
+                let loop_list = self.loop_list.clone();
+                let export_dir = self.export_dir.as_ref().unwrap().clone();
+                thread::spawn(move || {
+                    // Get path
+                    let path = Path::new(&data_dir).join(format!("data.00{}", i));
+                    if !path.is_file() {
+                        return;
+                    }
+                    // Open file
+                    let mut file = OpenOptions::new().read(true).open(path).unwrap();
+                    for rz_file in loop_list[&i].iter() {
+                        let mut buf = vec![0u8; rz_file.base.size as usize];
+                        file.seek(std::io::SeekFrom::Start(rz_file.base.offset.into())).unwrap();
+                        file.read_exact(&mut buf).unwrap();
+            
+                        DataHandler::save_file(&export_dir, &rz_file.name, rz_file, &mut buf).unwrap();
+                    }
+                })
+            })
+            .collect();
+
+        for handle in threads {
+            handle.join().unwrap();
+        }
+    }
+
+    pub fn dump_by_filename(&self, file_name: &str) -> Result<(), anyhow::Error> {
+        if !self.check_export_dir() {
+            return Err(StripantError::InvalidExportDirectory.into());
+        }
+
+        if let Some(rz_file) = self.get_entry_by_name(file_name) {
+            let path = Path::new(&self.data_dir).join(format!("data.00{}", rz_file.file));
+            if !path.is_file() {
+                return Err(StripantError::NoDataPath(rz_file.file).into());
+            }
+
+            let mut buf = vec![0u8; rz_file.base.size as usize];
+            // use scope for reading
+            let mut file = File::open(path)?;
+            file.seek(std::io::SeekFrom::Start(rz_file.base.offset.into()))?;
+            file.read_exact(&mut buf)?;
+            
+            DataHandler::save_file(self.export_dir.as_ref().unwrap(), file_name, &rz_file, &mut buf)?
+        }
+        Ok(())
+    }
+
+    fn save_file(export_dir: &str, file_name: &str, rz_file: &RZFile, buf: &mut [u8]) -> Result<(), anyhow::Error> {
+        if DataHandler::is_encrypted(file_name) {
+            RZFileManagement::cipher( buf);
+        }
+
+        let ext = Path::new(rz_file.name.as_str()).extension();
+        if ext.is_none() {
+            return Err(StripantError::NotAnExtension.into());
+        }
+
+        let mut new_file = Path::new(export_dir).join(ext.unwrap());
+        if !new_file.is_dir() && fs::create_dir(&new_file).is_err() {
+            println!("Race condition during subdir creation: {}", new_file.display());
+        }
+        new_file.push(rz_file.name.clone());
+
+        // use scope for writing
+        let mut export_file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(new_file)?;
+
+        export_file.write_all(buf)?;
+        Ok(())
+    }
+
+    fn is_encrypted(file_name: &str) -> bool {
+        for n in DECRYPTED_EXTENSIONS.iter() {
+            if file_name.ends_with(n) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -127,27 +284,38 @@ impl RZFileManagement {
 
         ((checksum & 0x7) + 1) as u8
     }
+
     pub fn decode_filename(hash: Vec<u8>) -> Result<String, anyhow::Error> {
         let mut name = hash[1..hash.len() - 1].to_vec();
 
         RZFileManagement::swap_string(&mut name);
 
-        let mut compute_loop: i32 = REF_TABLE[hash[hash.len() - 1] as usize] as i32;
+        let mut depth: i32 = REF_TABLE[hash[hash.len() - 1] as usize] as i32;
 
         for n in name.iter_mut() {
             let mut compute_var = *n;
-            for _ in 0..compute_loop {
+            for _ in 0..depth {
                 compute_var = DEC_TABLE[compute_var as usize];
             }
 
             *n = compute_var;
-            compute_loop = (compute_loop + (17 * compute_var as i32)) % 32 + 1;
+
+            // the following is identical, just safe for overflows
+            // depth = (depth + (17 * compute_var as i32)) % 32 + 1;
+            depth = (depth
+                .checked_add((compute_var as i32).checked_mul(17).unwrap_or(0))
+                .unwrap_or(0))
+            .checked_rem(32)
+            .unwrap_or(0)
+            .checked_add(1)
+            .unwrap_or(0);
         }
 
         Ok(String::from_utf8(name)?)
     }
 
-    fn cipher(buffer: &mut [u8], mut index: u8) -> u8 {
+    fn cipher(buffer: &mut [u8]) -> u8 {
+        let mut index = 0u8;
         for n in buffer.iter_mut() {
             *n ^= RESOURCE_ENCODE_KEY[index as usize];
             index = index.checked_add(1).unwrap_or(0);
