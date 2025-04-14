@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use stripant::{DataHandler, RZFile};
+use stipant::{DataHandler, RZFile};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
-mod stripant;
+mod stipant;
 
 pub struct AppState {
     data_handler: Option<DataHandler>,
