@@ -56,7 +56,7 @@ const REF_TABLE: [u8; 128] = [
 const DECRYPTED_EXTENSIONS: [&str; 6] = ["dds", "cob", "naf", "nx3", "nfm", "tga"];
 
 #[derive(Error, Debug)]
-enum StripantError {
+enum StipantError {
     #[error("Invalid file path, data.00{0} not found.")]
     NoDataPath(u8),
     #[error("Not a directory.")]
@@ -101,12 +101,12 @@ impl DataHandler {
     pub fn new(filepath: &str) -> Result<Self, anyhow::Error> {
         let path = Path::new(filepath);
         if !path.is_dir() {
-            return Err(StripantError::NotADirectory.into());
+            return Err(StipantError::NotADirectory.into());
         }
 
         let data_file = path.join("data.000");
         if !data_file.is_file() {
-            return Err(StripantError::NoDataPath(0).into());
+            return Err(StipantError::NoDataPath(0).into());
         }
 
         let mut loop_list = HashMap::new();
@@ -210,13 +210,13 @@ impl DataHandler {
 
     pub fn dump_by_filename(&self, file_name: &str) -> Result<(), anyhow::Error> {
         if !self.check_export_dir() {
-            return Err(StripantError::InvalidExportDirectory.into());
+            return Err(StipantError::InvalidExportDirectory.into());
         }
 
         if let Some(rz_file) = self.get_entry_by_name(file_name) {
             let path = Path::new(&self.data_dir).join(format!("data.00{}", rz_file.file));
             if !path.is_file() {
-                return Err(StripantError::NoDataPath(rz_file.file).into());
+                return Err(StipantError::NoDataPath(rz_file.file).into());
             }
 
             let mut buf = vec![0u8; rz_file.base.size as usize];
@@ -237,7 +237,7 @@ impl DataHandler {
 
         let ext = Path::new(rz_file.name.as_str()).extension();
         if ext.is_none() {
-            return Err(StripantError::NotAnExtension.into());
+            return Err(StipantError::NotAnExtension.into());
         }
 
         let mut new_file = Path::new(export_dir).join(ext.unwrap());
