@@ -13,4 +13,6 @@ On a packed archive with around 100k files I can achieve sub 2 second for dumpin
 
 ## Screenshot
 
-![Screenshot of stipant](/.github/screenshot.png)
+<p align="center">
+        <img src="/.github/screenshot.png" />
+</p>
