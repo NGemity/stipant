@@ -1,13 +1,16 @@
 use std::sync::{Arc, Mutex};
 
+use config::AppConfig;
 use stipant::{DataHandler, RZFile};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
+mod config;
 mod stipant;
 
 pub struct AppState {
     data_handler: Option<DataHandler>,
+    config: Arc<AppConfig>
 }
 
 #[tauri::command]
@@ -16,7 +19,7 @@ fn select_data_dir(app_handle: tauri::AppHandle) {
         if let Some(p) = file_path {
             let state = app_handle.state::<Mutex<AppState>>();
             let mut unlocked = state.lock().unwrap();
-            match DataHandler::new(&p.to_string()) {
+            match DataHandler::new(&p.to_string(), unlocked.config.clone()) {
                 Ok(mgr) => {
                     app_handle.emit("set_filecount", mgr.len()).unwrap();
                     app_handle
@@ -29,7 +32,7 @@ fn select_data_dir(app_handle: tauri::AppHandle) {
                         .dialog()
                         .message(err.to_string())
                         .kind(tauri_plugin_dialog::MessageDialogKind::Error)
-                        .blocking_show();
+                        .show(|_|{})
                 }
             }
         };
@@ -98,9 +101,10 @@ fn dump_all(app_handle: tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let cfg = Arc::new(AppConfig::new().unwrap_or_default());
     tauri::Builder::default()
         .setup(|app| {
-            app.manage(Mutex::new(AppState { data_handler: None }));
+            app.manage(Mutex::new(AppState { data_handler: None, config: cfg }));
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
