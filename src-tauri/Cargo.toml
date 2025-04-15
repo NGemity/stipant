@@ -1,6 +1,6 @@
 [package]
 name = "stipant"
-version = "0.1.0"
+version = "0.1.1"
 description = "Unpacker for the ROSE project."
 authors = ["NGemity"]
 edition = "2024"
