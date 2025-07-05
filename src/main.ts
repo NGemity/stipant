@@ -15,19 +15,13 @@ let dump_file: HTMLButtonElement | null;
 let dump_all: HTMLButtonElement | null;
 let filecount: HTMLParagraphElement | null;
 
-type IndexFile = {
-  str_len: number;
-  hash: string;
-  offset: number;
-  size: number;
-}
-
 type RZFile = {
-  base: IndexFile;
   hash: string;
   name: string;
   file: number;
   found: boolean;
+  size: number;
+  offset: number;
 }
 
 async function select_data_dir() {
@@ -135,8 +129,8 @@ listen<RZFile>('set_data', (event) => {
   console.log(event.payload);
   if(event.payload.found === true) {
     filehash.value = event.payload.hash;
-    size.value = event.payload.base.size.toString();
-    offset.value = event.payload.base.size.toString();
+    size.value = event.payload.size.toString();
+    offset.value = event.payload.size.toString();
     location.value = `data.00${event.payload.file.toString()}`;
   } else {
     console.log("Not found?")

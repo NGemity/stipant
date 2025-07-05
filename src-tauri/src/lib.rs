@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
 use config::AppConfig;
-use stipant::{DataHandler, RZFile};
+use stipant::{DataHandler, RZData};
 use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
@@ -65,7 +65,7 @@ fn get_filename(app_handle: tauri::AppHandle, filename: String) {
             app_handle.emit("set_data", entry).unwrap();
             return;
         }
-        let empty_display = Arc::new(RZFile::default());
+        let empty_display = Arc::new(RZData::default());
         app_handle.emit("set_data", empty_display).unwrap();
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "stipant"
-version = "0.1.1"
+version = "0.1.2"
 description = "Unpacker for the ROSE project."
 authors = ["NGemity"]
 edition = "2024"
@@ -30,4 +30,4 @@ thiserror = "2.0.12"
 config = "0.15.11"
 serde_derive = "1.0.219"
 base64 = "0.22.1"
-
+rzfile ={ git = "https://github.com/NGemity/rzfile.git" }
